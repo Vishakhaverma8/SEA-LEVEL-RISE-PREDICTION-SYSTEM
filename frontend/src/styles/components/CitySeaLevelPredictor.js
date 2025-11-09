@@ -1,63 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Search, MapPin, TrendingUp, AlertTriangle, Waves, Activity } from 'lucide-react';
-import axios from 'axios';
-import { searchCitiesForPrediction, predictAnyCitySeaLevel } from '../services/api';
-
+import { Search, MapPin, TrendingUp, AlertTriangle, Waves } from 'lucide-react';
+import { predictAnyCitySeaLevel } from '../services/api';
 
 const CitySeaLevelPredictor = () => {
-  const [availableCities, setAvailableCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [scenario, setScenario] = useState('moderate');
   const [predictions, setPredictions] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [modelInfo, setModelInfo] = useState(null);
 
-const handleSearchInput = async (value) => {
-  setSearchTerm(value);
+  const fetchPredictions = async (city, scen) => {
+    setLoading(true);
+    setError(null);
 
-  if (value.length >= 3) {
-    const result = await searchCitiesForPrediction(value);
-    if (result.success && result.data.status === 'success') {
-      setAvailableCities(result.data.results.map(c => c.display_name));
-    }
-  }
-};
+    try {
+      const response = await predictAnyCitySeaLevel(city, scen, '2030,2040,2050,2075,2100');
 
-  // Fetch available cities on mount
-  useEffect(() => {
-    fetchAvailableCities();
-  }, []);
-
-  const fetchAvailableCities = async () => {
-  // Ye function ab use nahi ho raha
-  // City list search se hi milegi
-};
-  
-
-const fetchPredictions = async (city, scen) => {
-  setLoading(true);
-  setError(null);
-
-  try {
-    const response = await predictAnyCitySeaLevel(city, scen, '2030,2040,2050,2075,2100');
-
-    if (response.success && response.data.status === 'success') {
-      setPredictions(response.data.data);
-      setModelInfo(response.data.model_info);
-    } else {
+      if (response.success && response.data.status === 'success') {
+        setPredictions(response.data.data);
+      } else {
+        setError('Failed to fetch predictions');
+      }
+    } catch (err) {
       setError('Failed to fetch predictions');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error(err);
-    setError('Failed to fetch predictions');
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   const handleCitySelect = (city) => {
     setSelectedCity(city);
@@ -72,18 +43,14 @@ const fetchPredictions = async (city, scen) => {
     }
   };
 
-  const filteredCities = availableCities.filter(city =>
-    city.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const getVulnerabilityColor = (vulnerability) => {
-    switch (vulnerability) {
-      case 'critical': return '#ff4444';
-      case 'high': return '#ffa500';
-      case 'moderate': return '#ffd700';
-      case 'low': return '#00c851';
-      default: return '#888';
-    }
+    const colors = {
+      'critical': '#ff4444',
+      'high': '#ffa500',
+      'moderate': '#ffd700',
+      'low': '#00c851'
+    };
+    return colors[vulnerability] || '#888';
   };
 
   const CustomTooltip = ({ active, payload }) => {
@@ -91,12 +58,8 @@ const fetchPredictions = async (city, scen) => {
       return (
         <div style={styles.tooltip}>
           <p style={styles.tooltipLabel}>Year: {payload[0].payload.year}</p>
-          <p style={styles.tooltipValue}>
-            Local Rise: {payload[0].value}mm
-          </p>
-          <p style={styles.tooltipValue}>
-            Flood Risk: {payload[0].payload.flooding_risk}%
-          </p>
+          <p style={styles.tooltipValue}>Local Rise: {payload[0].value}mm</p>
+          <p style={styles.tooltipValue}>Flood Risk: {payload[0].payload.flooding_risk}%</p>
         </div>
       );
     }
@@ -105,25 +68,6 @@ const fetchPredictions = async (city, scen) => {
 
   return (
     <div style={styles.container}>
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-        .city-item:hover {
-          background: rgba(0, 212, 255, 0.2);
-          transform: translateX(5px);
-        }
-        .scenario-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
-        }
-      `}</style>
-
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.titleSection}>
@@ -135,18 +79,6 @@ const fetchPredictions = async (city, scen) => {
         </div>
       </div>
 
-      {/* Model Info Badge */}
-      {modelInfo && (
-        <div style={styles.modelBadge}>
-          <Activity size={16} color="#00ff88" />
-          <span>Model: {modelInfo.model_type}</span>
-          <span style={styles.separator}>|</span>
-          <span>{modelInfo.training_data_points} data points</span>
-          <span style={styles.separator}>|</span>
-          <span>{modelInfo.available_cities} cities available</span>
-        </div>
-      )}
-
       {/* Search Section */}
       <div style={styles.searchSection}>
         <div style={styles.searchContainer}>
@@ -154,28 +86,12 @@ const fetchPredictions = async (city, scen) => {
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => handleSearchInput(e.target.value)}
-            placeholder="Search for a coastal city..."
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && searchTerm && handleCitySelect(searchTerm)}
+            placeholder="Enter city name and press Enter..."
             style={styles.searchInput}
           />
         </div>
-
-        {/* City Suggestions */}
-        {searchTerm && filteredCities.length > 0 && (
-          <div style={styles.suggestionsContainer}>
-            {filteredCities.slice(0, 8).map(city => (
-              <div
-                key={city}
-                className="city-item"
-                style={styles.suggestionItem}
-                onClick={() => handleCitySelect(city)}
-              >
-                <MapPin size={16} color="#00d4ff" />
-                <span>{city}</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Popular Cities Quick Select */}
         <div style={styles.popularCities}>
@@ -200,7 +116,6 @@ const fetchPredictions = async (city, scen) => {
         <div style={styles.scenarioSection}>
           <span style={styles.selectorLabel}>Emission Scenario:</span>
           <button
-            className="scenario-btn"
             style={{
               ...styles.scenarioBtn,
               ...(scenario === 'optimistic' ? styles.scenarioBtnActive : {}),
@@ -211,7 +126,6 @@ const fetchPredictions = async (city, scen) => {
             🟢 Optimistic
           </button>
           <button
-            className="scenario-btn"
             style={{
               ...styles.scenarioBtn,
               ...(scenario === 'moderate' ? styles.scenarioBtnActive : {}),
@@ -222,7 +136,6 @@ const fetchPredictions = async (city, scen) => {
             🟡 Moderate
           </button>
           <button
-            className="scenario-btn"
             style={{
               ...styles.scenarioBtn,
               ...(scenario === 'pessimistic' ? styles.scenarioBtnActive : {}),
@@ -296,8 +209,8 @@ const fetchPredictions = async (city, scen) => {
                 <LineChart data={predictions.predictions}>
                   <defs>
                     <linearGradient id="localRiseGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#00d4ff" stopOpacity={0.1}/>
+                      <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#00d4ff" stopOpacity={0.1} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
@@ -353,19 +266,24 @@ const fetchPredictions = async (city, scen) => {
                 <div style={styles.tableCell}>Global Rise</div>
                 <div style={styles.tableCell}>Local Rise</div>
                 <div style={styles.tableCell}>Flood Risk</div>
-                <div style={styles.tableCell}>Impact</div>
+                <div style={styles.tableCell}>Vulnerability</div>
               </div>
               {predictions.predictions.map((pred, index) => (
                 <div key={index} style={styles.tableRow}>
                   <div style={styles.tableCell}>{pred.year}</div>
                   <div style={styles.tableCell}>+{pred.global_rise}mm</div>
-                  <div style={{...styles.tableCell, color: '#00d4ff', fontWeight: 'bold'}}>
+                  <div style={{ ...styles.tableCell, color: '#00d4ff', fontWeight: 'bold' }}>
                     +{pred.local_rise}mm
                   </div>
-                  <div style={{...styles.tableCell, color: '#ff6b6b', fontWeight: 'bold'}}>
+                  <div style={{ ...styles.tableCell, color: '#ff6b6b', fontWeight: 'bold' }}>
                     {pred.flooding_risk}%
                   </div>
-                  <div style={styles.tableCell}>{pred.impact_percentage}% affected</div>
+                  <div style={{
+                    ...styles.tableCell,
+                    color: getVulnerabilityColor(pred.vulnerability)
+                  }}>
+                    {pred.vulnerability}
+                  </div>
                 </div>
               ))}
             </div>
@@ -377,7 +295,7 @@ const fetchPredictions = async (city, scen) => {
             <div>
               <strong>ML Prediction Notice:</strong> These predictions are generated using machine learning
               models trained on historical data (1900-2024). Actual outcomes depend on global emissions,
-              local geography, and adaptation measures. Use for educational and planning purposes.
+              local geography, and adaptation measures.
             </div>
           </div>
         </div>
@@ -389,7 +307,7 @@ const fetchPredictions = async (city, scen) => {
           <Search size={64} color="#444" />
           <h4 style={styles.emptyTitle}>Search for a Coastal City</h4>
           <p style={styles.emptyText}>
-            Select a city from the quick select buttons above or search from {availableCities.length} available cities
+            Enter a city name or select from quick options above
           </p>
         </div>
       )}
@@ -425,21 +343,6 @@ const styles = {
     color: '#888',
     margin: '0.5rem 0 0 0'
   },
-  modelBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem 1.5rem',
-    background: 'rgba(0, 255, 136, 0.1)',
-    border: '1px solid rgba(0, 255, 136, 0.3)',
-    borderRadius: '8px',
-    fontSize: '0.875rem',
-    color: '#00ff88',
-    marginBottom: '1.5rem'
-  },
-  separator: {
-    color: '#444'
-  },
   searchSection: {
     marginBottom: '2rem'
   },
@@ -462,24 +365,6 @@ const styles = {
     color: '#fff',
     fontSize: '1rem',
     outline: 'none'
-  },
-  suggestionsContainer: {
-    background: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: '12px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    marginBottom: '1rem',
-    maxHeight: '300px',
-    overflowY: 'auto'
-  },
-  suggestionItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem 1rem',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-    color: '#fff'
   },
   popularCities: {
     display: 'flex',
@@ -538,7 +423,8 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     padding: '3rem',
-    gap: '1rem'
+    gap: '1rem',
+    color: '#fff'
   },
   spinner: {
     width: '50px',
@@ -588,6 +474,9 @@ const styles = {
     fontSize: '0.875rem',
     color: '#888',
     flexWrap: 'wrap'
+  },
+  separator: {
+    color: '#444'
   },
   riskBadge: {
     padding: '0.5rem 1rem',

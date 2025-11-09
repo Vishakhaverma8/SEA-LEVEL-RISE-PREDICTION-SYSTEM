@@ -256,3 +256,4 @@ export const predictAnyCitySeaLevel = async (city, scenario, years) => {
     return handleError(error);
   }
 };
+
